@@ -175,7 +175,23 @@ class OmegaCore:
             )
         return None
 
+    def auto_route_intent(self, text):
+        low = text.lower()
+        if any(w in low for w in ("сводк", "итоги дня", "план на сегодня", "что по задачам")):
+            return self.handle_commands("/summary")
+        if any(w in low for w in ("покажи заметки", "список заметок", "мои записи", "что записано")):
+            return self.handle_commands("/notes")
+        if any(w in low for w in ("день вахты", "график работы", "когда выходн", "сколько до смены")):
+            return self.handle_commands("/shift")
+        if any(w in low for w in ("оптимизируй себя", "улучши правила", "подстрой настройки")):
+            return self.handle_commands("/optimize")
+        if any(w in low for w in ("какие команды", "что ты умеешь", "покажи меню")):
+            return self.handle_commands("/help")
+        return None
+
     def think(self, text):
+        if (auto_res := self.auto_route_intent(text)) is not None:
+            return auto_res
         if (cmd_res := self.handle_commands(text)) is not None:
             return cmd_res
         preds = self.g.get('preds', [])
