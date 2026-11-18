@@ -63,58 +63,85 @@ class OmegaCore:
         t = text.strip()
         low = t.lower()
         if low.startswith("/note ") or low.startswith("запиши "):
-            note_txt = t.split(" ", 1).strip()
+            note_txt = t.split(" ", 1)[1].strip()
             notes = self._ld("user_notes.json", [])
             notes.append({"ts": time.strftime("%d.%m.%Y %H:%M"), "text": note_txt})
-            json.dump(notes[-300:], open("user_notes.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-            return f"✅ Сохранено в архив (всего: {len(notes)}):\n«{note_txt}»"
+            json.dump(notes[-500:], open("user_notes.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+            return f"✅ Записано в архив (всего: {len(notes)}):\n«{note_txt}»"
         if low in ("/notes", "заметки"):
             notes = self._ld("user_notes.json", [])
             if not notes:
-                return "📭 Архив пуст. Напиши «Запиши ...» или /note <текст>."
+                return "📭 Архив заметок пуст. Напиши «Запиши ...» или /note <текст>."
             lines = [f"{i+1}. [{n['ts']}] {n['text']}" for i, n in enumerate(notes[-15:])]
-            return "🗂 Последние заметки:\n\n" + "\n".join(lines)
+            return "🗂 Последние 15 заметок:\n\n" + "\n".join(lines)
         if low.startswith("/find ") or low.startswith("найди "):
-            kw = t.split(" ", 1).strip().lower()
+            kw = t.split(" ", 1)[1].strip().lower()
             notes = self._ld("user_notes.json", [])
             found = [f"• [{n['ts']}] {n['text']}" for n in notes if kw in n['text'].lower()]
-            return ("🔎 Найдено по запросу «" + kw + "»:\n\n" + "\n".join(found[-10:])) if found else f"Ничего не найдено по слову «{kw}»."
+            return ("🔎 Найдено по запросу «" + kw + "»:\n\n" + "\n".join(found[-10:])) if found else f"По слову «{kw}» ничего не найдено."
         if low.startswith("/del "):
             try:
-                idx = int(t.split(" ", 1).strip()) - 1
+                idx = int(t.split(" ", 1)[1].strip()) - 1
                 notes = self._ld("user_notes.json", [])
                 last_slice = notes[-15:]
                 if 0 <= idx < len(last_slice):
                     target = last_slice[idx]
                     notes.remove(target)
                     json.dump(notes, open("user_notes.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-                    return f"🗑 Удалена заметка: «{target['text']}»"
+                    return f"🗑 Удалено: «{target['text']}»"
             except Exception:
                 pass
-            return "⚠️ Укажи правильный номер заметки из списка /notes (например: /del 1)."
+            return "⚠️ Укажи номер заметки из списка /notes (например: /del 1)."
+        if low.startswith("/shift"):
+            parts = t.split()
+            if len(parts) > 1:
+                self.g["shift_start"] = parts[1].strip()
+                self._sv()
+                return f"📅 Дата начала вахты (14/14) зафиксирована: {self.g['shift_start']}"
+            st = self.g.get("shift_start")
+            if not st:
+                return "📅 Задай дату начала вахты командой: /shift ДД.ММ.ГГГГ"
+            try:
+                d0 = time.mktime(time.strptime(st, "%d.%m.%Y"))
+                days = int((time.time() - d0) // 86400)
+                cycle_day = (days % 28) + 1
+                phase = "🛠 Рабочая вахта" if cycle_day <= 14 else "🏖 Выходной период"
+                left = (14 - cycle_day + 1) if cycle_day <= 14 else (28 - cycle_day + 1)
+                return f"📅 График 14/14 (старт {st}):\n• Сегодня: {cycle_day}-й день цикла ({phase})\n• До смены режима осталось: {left} дн."
+            except Exception:
+                return "⚠️ Неверный формат даты. Используй: /shift 10.11.2026"
         if low.startswith("/remind ") or "напомни через " in low:
-            m = re.search(r"([0-9]+)\s*(?:мин|m)?\s+(.+)", t, re.IGNORECASE)
             cid = self.g.get("owner_cid")
-            if m and cid:
-                mins, task = int(m.group(1)), m.group(2).strip()
-                def _timer(c=cid, sec=mins*60, msg=task):
-                    time.sleep(sec)
-                    send(c, f"⏰ НАПОМИНАНИЕ ({mins} мин):\n{msg}")
+            nums = [int(w) for w in low.replace(",", " ").split() if w.isdigit()]
+            if nums and cid:
+                val = nums[0]
+                is_hour = any(h in low for h in ("час", "ч ", "hour"))
+                sec = val * 3600 if is_hour else val * 60
+                unit = "ч." if is_hour else "мин."
+                msg = t.split(str(val), 1)[1].strip()
+                for prefix in ("минут", "минуты", "минуту", "мин", "часов", "часа", "час", "ч"):
+                    if msg.lower().startswith(prefix):
+                        msg = msg[len(prefix):].strip()
+                msg = msg or "Плановая проверка"
+                def _timer(c=cid, s=sec, m_txt=msg, v=val, u=unit):
+                    time.sleep(s)
+                    send(c, f"⏰ НАПОМИНАНИЕ ({v} {u}):\n{m_txt}")
                 threading.Thread(target=_timer, daemon=True).start()
-                return f"⏳ Таймер запущен на {mins} мин: «{task}»"
-            return "⚠️ Формат: /remind 15 проверить статус (или голосом: Напомни через 15 минут...)"
+                return f"⏳ Таймер поставлен на {val} {unit}: «{msg}»"
+            return "⚠️ Пример: /remind 15 проверить статус (или голосом: Напомни через 2 часа...)"
         if low in ("/status", "статус", "/help", "помощь"):
             notes = self._ld("user_notes.json", [])
             return (
-                f"📊 Статус и команды ассистента:\n"
-                f"• Заметок в базе: {len(notes)}\n"
+                f"📊 Ассистент готов к работе:\n"
+                f"• Заметок в архиве: {len(notes)}\n"
                 f"• Узлов в памяти: {len(self.g.get('edges', []))}\n\n"
-                f"Команды:\n"
+                f"Доступные команды:\n"
                 f"• Запиши <текст> или /note — сохранить заметку\n"
-                f"• /notes — показать последние 15 записей\n"
-                f"• /find <слово> — поиск по заметкам\n"
+                f"• /notes — последние 15 записей\n"
+                f"• /find <слово> — поиск по архиву\n"
                 f"• /del <номер> — удалить запись\n"
-                f"• /remind <мин> <текст> — поставить таймер"
+                f"• /remind <время> <текст> — таймер (минуты/часы)\n"
+                f"• /shift ДД.ММ.ГГГГ — расчёт вахты 14/14"
             )
         return None
 
