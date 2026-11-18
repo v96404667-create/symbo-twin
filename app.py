@@ -18,7 +18,7 @@ class OmegaCore:
         if not GROQ_KEY: return '⚠️ Ключ GROQ_API_KEY не подключен.'
         for m in ('llama-3.3-70b-versatile', 'llama-3.1-8b-instant'):
             try:
-                req = urllib.request.Request(f'{G_URL}/chat/completions', data=json.dumps({'model': m, 'messages': msgs, 'temperature': temp, 'max_tokens': tok}).encode(), headers={'Authorization': f'Bearer {GROQ_KEY}', 'Content-Type': 'application/json', 'User-Agent': 'Omega/13'})
+                req = urllib.request.Request(f'{base}/chat/completions', data=json.dumps({'model': m, 'messages': msgs, 'temperature': temp, 'max_tokens': tok}).encode(), headers={'Authorization': f'Bearer {GROQ_KEY}', 'Content-Type': 'application/json', 'User-Agent': 'Omega/13'})
                 return json.loads(urllib.request.urlopen(req, timeout=15).read().decode())['choices'][0]['message']['content'].strip()
             except Exception as e: last_err = str(e); continue
         return f'⚠️ Ошибка шлюза: {last_err}'
