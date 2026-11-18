@@ -154,6 +154,11 @@ class OmegaCore:
             r = self.self_optimize("Ручной запуск оптимизации", "Анализ базы заметок")
             cfg = self._ld("adaptive_config.json", {"rules": [], "updates": 0})
             return f"⚙️ Самооптимизация выполнена (обновлений: {cfg['updates']}).\nНовое правило: {r or 'текущие правила оптимальны'}\n\nАктивные правила:\n• " + "\n• ".join(cfg['rules'])
+        if low in ("/summary", "сводка"):
+            notes = self._ld("user_notes.json", [])[-5:]
+            n_str = "\n".join(f"• {n['text']}" for n in notes) if notes else "• Заметок пока нет"
+            cfg = self._ld("adaptive_config.json", {"rules": [], "updates": 0})
+            return f"📋 СВОДКА АССИСТЕНТА:\n\nПоследние задачи:\n{n_str}\n\nАктивных правил адаптации: {len(cfg['rules'])} (обновлений: {cfg['updates']})"
         if low in ("/status", "статус", "/help", "помощь"):
             notes = self._ld("user_notes.json", [])
             return (
