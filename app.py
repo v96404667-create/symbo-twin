@@ -59,6 +59,27 @@ class OmegaCore:
         sc.sort(key=lambda x: x[0], reverse=True)
         return list(dict.fromkeys([f"[{e['s']} —({e['r']})→ {e['o']}]" for e in self.g.get('edges', [])[-4:]] + [f"[{e['s']} —({e['r']})→ {e['o']}]" for _, e in sc[:k]]))
 
+
+    def self_optimize(self, last_q="", last_a=""):
+        cfg = self._ld("adaptive_config.json", {"rules": ["Отвечай кратко, структурированно и строго по делу"], "updates": 0})
+        notes = self._ld("user_notes.json", [])[-10:]
+        notes_ctx = "; ".join(n["text"] for n in notes) if notes else "Заметок пока мало"
+        prompt = (
+            f"Текущие правила ассистента: {cfg['rules']}\n"
+            f"Последние заметки пользователя: {notes_ctx}\n"
+            f"Последний диалог: Q={last_q[:200]} | A={last_a[:200]}\n"
+            "Сформулируй 1 короткое конкретное правило (до 12 слов), как улучшить стиль или точность ответов под задачи пользователя. Без лишних слов."
+        )
+        new_rule = self.llm([{"role": "system", "content": "Ты оптимизатор настроек ИИ-ассистента."}, {"role": "user", "content": prompt}], temp=0.2, tok=60)
+        if new_rule and not new_rule.startswith("⚠️") and len(new_rule) < 120:
+            if new_rule not in cfg["rules"]:
+                cfg["rules"].append(new_rule.strip())
+                cfg["rules"] = cfg["rules"][-8:]
+                cfg["updates"] += 1
+                json.dump(cfg, open("adaptive_config.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+                return new_rule.strip()
+        return None
+
     def handle_commands(self, text):
         t = text.strip()
         low = t.lower()
@@ -129,6 +150,10 @@ class OmegaCore:
                 threading.Thread(target=_timer, daemon=True).start()
                 return f"⏳ Таймер поставлен на {val} {unit}: «{msg}»"
             return "⚠️ Пример: /remind 15 проверить статус (или голосом: Напомни через 2 часа...)"
+        if low in ("/optimize", "оптимизируй"):
+            r = self.self_optimize("Ручной запуск оптимизации", "Анализ базы заметок")
+            cfg = self._ld("adaptive_config.json", {"rules": [], "updates": 0})
+            return f"⚙️ Самооптимизация выполнена (обновлений: {cfg['updates']}).\nНовое правило: {r or 'текущие правила оптимальны'}\n\nАктивные правила:\n• " + "\n• ".join(cfg['rules'])
         if low in ("/status", "статус", "/help", "помощь"):
             notes = self._ld("user_notes.json", [])
             return (
@@ -173,6 +198,8 @@ class OmegaCore:
             except Exception: pass
             self._sv()
         threading.Thread(target=_bg, daemon=True).start()
+        if self.e['cyc'] % 5 == 0:
+            threading.Thread(target=lambda: self.self_optimize(text, ans), daemon=True).start()
         return f"🧬 [Omega Gen v{self.e['gen']}.0 | Surprise: {surp} | Узлов: {len(self.g['edges'])}]\n\n" + ans
 core = OmegaCore()
 
