@@ -20,8 +20,8 @@ class OmegaCore:
             try:
                 req = urllib.request.Request(f'{G_URL}/chat/completions', data=json.dumps({'model': m, 'messages': msgs, 'temperature': temp, 'max_tokens': tok}).encode(), headers={'Authorization': f'Bearer {GROQ_KEY}', 'Content-Type': 'application/json', 'User-Agent': 'Omega/13'})
                 return json.loads(urllib.request.urlopen(req, timeout=15).read().decode())['choices'][0]['message']['content'].strip()
-            except Exception: continue
-        return '⚠️ Перегрузка шлюза, повтори запрос.'
+            except Exception as e: last_err = str(e); continue
+        return f'⚠️ Ошибка шлюза: {last_err}'
     def stt(self, fid):
         if not GROQ_KEY or not TG_TOKEN: return None
         try:
