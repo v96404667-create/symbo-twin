@@ -57,7 +57,31 @@ class OmegaCore:
             if ov: sc.append((ov * (1 + e.get('w', 1.0) * math.exp(-0.01 * max(0.1, (now - e.get('ts', now)) / 86400.0))), e))
         sc.sort(key=lambda x: x[0], reverse=True)
         return list(dict.fromkeys([f"[{e['s']} —({e['r']})→ {e['o']}]" for e in self.g.get('edges', [])[-4:]] + [f"[{e['s']} —({e['r']})→ {e['o']}]" for _, e in sc[:k]]))
+
+    def handle_commands(self, text):
+        t = text.strip()
+        low = t.lower()
+        if low.startswith("/note ") or low.startswith("запиши "):
+            note_txt = t.split(" ", 1)[1].strip()
+            notes = self._ld("user_notes.json", [])
+            notes.append({"ts": time.strftime("%d.%m.%Y %H:%M"), "text": note_txt})
+            json.dump(notes[-200:], open("user_notes.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+            return f"✅ Сохранено в архив заметок (всего: {len(notes)}):\n«{note_txt}»"
+        if low in ("/notes", "заметки"):
+            notes = self._ld("user_notes.json", [])
+            if not notes:
+                return "📭 Архив заметок пока пуст. Напиши «Запиши ...» или /note <текст>."
+            last = notes[-10:]
+            lines = [f"{i+1}. [{n['ts']}] {n['text']}" for i, n in enumerate(last)]
+            return "🗂 Последние заметки:\n\n" + "\n".join(lines)
+        if low in ("/status", "статус"):
+            notes = self._ld("user_notes.json", [])
+            return f"📊 Статус системы:\n• Заметок в базе: {len(notes)}\n• Узлов в памяти: {len(self.g.get('edges', []))}\n• Голосовой модуль (Whisper): Активен"
+        return None
+
     def think(self, text):
+        if (cmd_res := self.handle_commands(text)) is not None:
+            return cmd_res
         preds = self.g.get('preds', [])
         surp = round(1.0 - (len(set(text.lower().split()) & set(preds[-1]['i'].lower().split())) / max(1, len(text.split()))), 2) if preds else 0.5
         self.e['cyc'] += 1
