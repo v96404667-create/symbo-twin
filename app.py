@@ -15,13 +15,32 @@ class OmegaCore:
         json.dump(self.g, open('hyper_graph.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
         json.dump(self.e, open('omega_evo.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
     def llm(self, msgs, temp=0.3, tok=900):
-        if not GROQ_KEY: return '⚠️ Ключ GROQ_API_KEY не подключен.'
-        for m in ('llama-3.3-70b-versatile', 'llama-3.1-8b-instant'):
+        if not GROQ_KEY: return "⚠️ Ключ GROQ_API_KEY не подключен."
+        S = chr(47)
+        base = f"https:{S}{S}://groq.com{S}openai{S}v1"
+        models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+        try:
+            req_m = urllib.request.Request(f"{base}/models", headers={"Authorization": f"Bearer {GROQ_KEY}", "User-Agent": "Omega/13"})
+            m_data = json.loads(urllib.request.urlopen(req_m, timeout=6).read().decode()).get("data", [])
+            live = [x["id"] for x in m_data if not any(w in x["id"] for w in ("whisper", "guard", "tts", "vision"))]
+            if live:
+                best = [x for x in live if "70b" in x or "8b" in x]
+                models = (best + live)[:4]
+        except Exception:
+            pass
+        last_err = "no_models"
+        for m in models:
             try:
-                req = urllib.request.Request(f'{base}/chat/completions', data=json.dumps({'model': m, 'messages': msgs, 'temperature': temp, 'max_tokens': tok}).encode(), headers={'Authorization': f'Bearer {GROQ_KEY}', 'Content-Type': 'application/json', 'User-Agent': 'Omega/13'})
-                return json.loads(urllib.request.urlopen(req, timeout=15).read().decode())['choices'][0]['message']['content'].strip()
-            except Exception as e: last_err = str(e); continue
-        return f'⚠️ Ошибка шлюза: {last_err}'
+                body = json.dumps({"model": m, "messages": msgs, "temperature": temp, "max_tokens": tok}).encode()
+                req = urllib.request.Request(f"{base}/chat/completions", data=body, headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json", "User-Agent": "Omega/13"})
+                res = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+                return res["choices"]["message"]["content"].strip()
+            except Exception as e:
+                last_err = f"{m}: {e}"
+                continue
+        return f"⚠️ Ошибка шлюза: {last_err}"
+
+
     def stt(self, fid):
         if not GROQ_KEY or not TG_TOKEN: return None
         try:
