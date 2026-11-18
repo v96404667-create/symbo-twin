@@ -1,6 +1,6 @@
 import os, json, time, math, base64, threading, subprocess, urllib.request, http.server, socketserver
 GROQ_KEY = os.getenv("GROQ_API_KEY", "").strip()
-TG_TOKEN = os.getenv('TG_TOKEN') or base64.b64decode('OTI4NjEzODUyOTpBQUczYjNGdFJXcEpPc3VHa2p0V2c1MVZFbVJGOVVuYXIxWQ==').decode()
+TG_TOKEN = os.getenv('TG_TOKEN') or base64.b64decode('OTI3NjA5MzQwOTpBQUhPUDZ2UDd3U3ZuTkRvZmFiYlNiNWJScUtLTGVic2tBYw==').decode()
 S = chr(47)
 G_URL = f'https:{S}{S}api.groq.com{S}openai{S}v1'
 T_URL = f'https:{S}{S}api.telegram.org'
