@@ -1,3 +1,4 @@
+import re
 import os, json, time, math, base64, threading, subprocess, urllib.request, http.server, socketserver
 GROQ_KEY = os.getenv("GROQ_API_KEY", "").strip()
 TG_TOKEN = os.getenv('TG_TOKEN') or base64.b64decode('OTI3NjA5MzQwOTpBQUhPUDZ2UDd3U3ZuTkRvZmFiYlNiNWJScUtLTGVic2tBYw==').decode()
@@ -62,21 +63,59 @@ class OmegaCore:
         t = text.strip()
         low = t.lower()
         if low.startswith("/note ") or low.startswith("запиши "):
-            note_txt = t.split(" ", 1)[1].strip()
+            note_txt = t.split(" ", 1).strip()
             notes = self._ld("user_notes.json", [])
             notes.append({"ts": time.strftime("%d.%m.%Y %H:%M"), "text": note_txt})
-            json.dump(notes[-200:], open("user_notes.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-            return f"✅ Сохранено в архив заметок (всего: {len(notes)}):\n«{note_txt}»"
+            json.dump(notes[-300:], open("user_notes.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+            return f"✅ Сохранено в архив (всего: {len(notes)}):\n«{note_txt}»"
         if low in ("/notes", "заметки"):
             notes = self._ld("user_notes.json", [])
             if not notes:
-                return "📭 Архив заметок пока пуст. Напиши «Запиши ...» или /note <текст>."
-            last = notes[-10:]
-            lines = [f"{i+1}. [{n['ts']}] {n['text']}" for i, n in enumerate(last)]
+                return "📭 Архив пуст. Напиши «Запиши ...» или /note <текст>."
+            lines = [f"{i+1}. [{n['ts']}] {n['text']}" for i, n in enumerate(notes[-15:])]
             return "🗂 Последние заметки:\n\n" + "\n".join(lines)
-        if low in ("/status", "статус"):
+        if low.startswith("/find ") or low.startswith("найди "):
+            kw = t.split(" ", 1).strip().lower()
             notes = self._ld("user_notes.json", [])
-            return f"📊 Статус системы:\n• Заметок в базе: {len(notes)}\n• Узлов в памяти: {len(self.g.get('edges', []))}\n• Голосовой модуль (Whisper): Активен"
+            found = [f"• [{n['ts']}] {n['text']}" for n in notes if kw in n['text'].lower()]
+            return ("🔎 Найдено по запросу «" + kw + "»:\n\n" + "\n".join(found[-10:])) if found else f"Ничего не найдено по слову «{kw}»."
+        if low.startswith("/del "):
+            try:
+                idx = int(t.split(" ", 1).strip()) - 1
+                notes = self._ld("user_notes.json", [])
+                last_slice = notes[-15:]
+                if 0 <= idx < len(last_slice):
+                    target = last_slice[idx]
+                    notes.remove(target)
+                    json.dump(notes, open("user_notes.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+                    return f"🗑 Удалена заметка: «{target['text']}»"
+            except Exception:
+                pass
+            return "⚠️ Укажи правильный номер заметки из списка /notes (например: /del 1)."
+        if low.startswith("/remind ") or "напомни через " in low:
+            m = re.search(r"([0-9]+)\s*(?:мин|m)?\s+(.+)", t, re.IGNORECASE)
+            cid = self.g.get("owner_cid")
+            if m and cid:
+                mins, task = int(m.group(1)), m.group(2).strip()
+                def _timer(c=cid, sec=mins*60, msg=task):
+                    time.sleep(sec)
+                    send(c, f"⏰ НАПОМИНАНИЕ ({mins} мин):\n{msg}")
+                threading.Thread(target=_timer, daemon=True).start()
+                return f"⏳ Таймер запущен на {mins} мин: «{task}»"
+            return "⚠️ Формат: /remind 15 проверить статус (или голосом: Напомни через 15 минут...)"
+        if low in ("/status", "статус", "/help", "помощь"):
+            notes = self._ld("user_notes.json", [])
+            return (
+                f"📊 Статус и команды ассистента:\n"
+                f"• Заметок в базе: {len(notes)}\n"
+                f"• Узлов в памяти: {len(self.g.get('edges', []))}\n\n"
+                f"Команды:\n"
+                f"• Запиши <текст> или /note — сохранить заметку\n"
+                f"• /notes — показать последние 15 записей\n"
+                f"• /find <слово> — поиск по заметкам\n"
+                f"• /del <номер> — удалить запись\n"
+                f"• /remind <мин> <текст> — поставить таймер"
+            )
         return None
 
     def think(self, text):
