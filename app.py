@@ -89,22 +89,45 @@ def send(cid, txt):
     if TG_TOKEN:
         try: urllib.request.urlopen(urllib.request.Request(f'{T_URL}/bot{TG_TOKEN}/sendMessage', data=json.dumps({'chat_id': cid, 'text': txt[:4000]}).encode(), headers={'Content-Type': 'application/json'}), timeout=8)
         except Exception: pass
-def loop():
-    if not TG_TOKEN: return
-    try: urllib.request.urlopen(f'{T_URL}/bot{TG_TOKEN}/deleteWebhook?drop_pending_updates=true', timeout=8)
-    except Exception: pass
-    off = 0
+def self_ping():
+    S = chr(47)
+    u = f"https:{S}{S}symbo-twin.onrender.com"
     while True:
+        time.sleep(300)
+        try: urllib.request.urlopen(u, timeout=10)
+        except Exception: pass
+
+def set_hook():
+    if not TG_TOKEN: return
+    S = chr(47)
+    wh = f"https:{S}{S}symbo-twin.onrender.com{S}webhook"
+    try: urllib.request.urlopen(f"{T_URL}/bot{TG_TOKEN}/setWebhook?url={wh}", timeout=10)
+    except Exception: pass
+
+threading.Thread(target=self_ping, daemon=True).start()
+threading.Thread(target=set_hook, daemon=True).start()
+
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OMEGA v13.0 WEBHOOK LIVE")
+    def do_POST(self):
+        ln = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(ln).decode("utf-8") if ln else "{}"
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
         try:
-            res = json.loads(urllib.request.urlopen(f'{T_URL}/bot{TG_TOKEN}/getUpdates?offset={off}&timeout=15', timeout=20).read().decode())
-            for u in res.get('result', []):
-                off = u['update_id'] + 1
-                m = u.get('message', {})
-                cid, txt, vc = m.get('chat', {}).get('id'), m.get('text', '').strip(), m.get('voice')
-                if cid and vc: threading.Thread(target=lambda c=cid, f=vc['file_id']: send(c, (f'🎙 «{sp}»\n\n' + core.think(sp)) if (sp := core.stt(f)) else '⚠️ Ошибка голоса.'), daemon=True).start()
-                elif cid and txt: threading.Thread(target=lambda c=cid, t=txt: send(c, core.think(t)), daemon=True).start()
-        except Exception: time.sleep(1)
-threading.Thread(target=loop, daemon=True).start()
-class H(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b'OMEGA v13.0 LIVE')
-socketserver.TCPServer(('', int(os.environ.get('PORT', 10000))), H).serve_forever()
+            u = json.loads(body)
+            m = u.get("message", {})
+            cid, txt, vc = m.get("chat", {}).get("id"), m.get("text", "").strip(), m.get("voice")
+            if cid and vc:
+                threading.Thread(target=lambda c=cid, f=vc["file_id"]: send(c, (f"🎙 «{sp}»\n\n" + core.think(sp)) if (sp := core.stt(f)) else "⚠️ Ошибка голоса."), daemon=True).start()
+            elif cid and txt:
+                threading.Thread(target=lambda c=cid, t=txt: send(c, core.think(t)), daemon=True).start()
+        except Exception:
+            pass
+    def log_message(self, *a): pass
+
+socketserver.TCPServer(("", int(os.environ.get("PORT", 10000))), H).serve_forever()
