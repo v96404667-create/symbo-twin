@@ -17,7 +17,7 @@ class OmegaCore:
     def llm(self, msgs, temp=0.3, tok=900):
         if not GROQ_KEY: return "⚠️ Ключ GROQ_API_KEY не подключен."
         S = chr(47)
-        base = f"https:{S}{S}://groq.com{S}openai{S}v1"
+        base = G_URL
         models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
         try:
             req_m = urllib.request.Request(f"{base}/models", headers={"Authorization": f"Bearer {GROQ_KEY}", "User-Agent": "Omega/13"})
@@ -34,7 +34,7 @@ class OmegaCore:
                 body = json.dumps({"model": m, "messages": msgs, "temperature": temp, "max_tokens": tok}).encode()
                 req = urllib.request.Request(f"{base}/chat/completions", data=body, headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json", "User-Agent": "Omega/13"})
                 res = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
-                return res["choices"]["message"]["content"].strip()
+                return res["choices"][0]["message"]["content"].strip()
             except Exception as e:
                 last_err = f"{m}: {e}"
                 continue
