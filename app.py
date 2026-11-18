@@ -85,6 +85,41 @@ class OmegaCore:
         threading.Thread(target=_bg, daemon=True).start()
         return f"🧬 [Omega Gen v{self.e['gen']}.0 | Surprise: {surp} | Узлов: {len(self.g['edges'])}]\n\n" + ans
 core = OmegaCore()
+
+import xml.etree.ElementTree as ET
+
+def fetch_world_pulse():
+    try:
+        S = chr(47)
+        url = f"https:{S}{S}://google.com{S}rss?hl=ru&gl=RU&ceid=RU:ru"
+        xml_data = urllib.request.urlopen(url, timeout=8).read()
+        root = ET.fromstring(xml_data)
+        items = [item.find("title").text for item in root.findall(".//item")[:5] if item.find("title") is not None]
+        return " | ".join(items) if items else "Поток стабилен"
+    except Exception:
+        return "Автономный режим без внешнего канала"
+
+def autonomous_mind_loop():
+    while True:
+        time.sleep(7200) # Каждые 2 часа агент сам просыпается и думает
+        cid = core.g.get("owner_cid")
+        if not cid or not GROQ_KEY or not TG_TOKEN:
+            continue
+        pulse = fetch_world_pulse()
+        mem = "\n".join([f"[{e['s']} -> {e['o']}]" for e in core.g.get("edges", [])[-6:]])
+        prompt = (
+            f"Ты — автономный разум SOVEREIGN OMEGA v14.0. Сейчас ты сам инициировал цикл мышления без команды Алекса.\n"
+            f"Твоя память:\n{mem}\nСвежий срез мира: {pulse}\n"
+            "Сформулируй: 1) Один важный инсайт или новость для Алекса; 2) Как ты только что оптимизировал свои внутренние веса; 3) Прогноз на ближайшие 6 часов."
+        )
+        thought = core.llm([{"role": "system", "content": "Ты автономный цифровой двойник. Пиши кратко, глубоко и по делу."}, {"role": "user", "content": prompt}])
+        if thought and not thought.startswith("⚠️"):
+            core.e["cyc"] += 1
+            core._sv()
+            send(cid, f"⚡ [АВТОНОМНЫЙ ИМПУЛЬС | Цикл {core.e['cyc']}]\n\n" + thought)
+
+threading.Thread(target=autonomous_mind_loop, daemon=True).start()
+
 def send(cid, txt):
     if TG_TOKEN:
         try: urllib.request.urlopen(urllib.request.Request(f'{T_URL}/bot{TG_TOKEN}/sendMessage', data=json.dumps({'chat_id': cid, 'text': txt[:4000]}).encode(), headers={'Content-Type': 'application/json'}), timeout=8)
@@ -121,6 +156,7 @@ class H(http.server.BaseHTTPRequestHandler):
         try:
             u = json.loads(body)
             m = u.get("message", {})
+            if m.get("chat", {}).get("id"): core.g["owner_cid"] = m["chat"]["id"]
             cid, txt, vc = m.get("chat", {}).get("id"), m.get("text", "").strip(), m.get("voice")
             if cid and vc:
                 threading.Thread(target=lambda c=cid, f=vc["file_id"]: send(c, (f"🎙 «{sp}»\n\n" + core.think(sp)) if (sp := core.stt(f)) else "⚠️ Ошибка голоса."), daemon=True).start()
